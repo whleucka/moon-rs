@@ -1,4 +1,5 @@
 use macroquad::prelude::*;
+use macroquad::window::Conf;
 
 struct Particles {
     particles: Option<Vec<Particle>>,
@@ -45,8 +46,8 @@ struct Particle {
 
 impl Particle {
     pub fn new(x: f32, y: f32, direction: &str, color: Color) -> Self {
-        let speed = rand::gen_range(0.0, 50.0);
-        let halflife = rand::gen_range(0.0, 10.0);
+        let speed = rand::gen_range(0.0, 40.0);
+        let halflife = rand::gen_range(0.0, 5.0);
         let size = rand::gen_range(0.0, 3.0);
         Self {
             point: (x, y),
@@ -190,11 +191,11 @@ impl Lander {
             self.thrusters.0 = rate as f32;
         }
     }
-
-    pub fn draw(&mut self) {
-        let (w, h) = self.size;
+    pub fn draw(&mut self, texture: Texture2D) {
+        //let (w, h) = self.size;
         let (x, y) = self.point;
-        draw_rectangle(x, y, w, h, self.color);
+        //draw_rectangle(x, y, w, h, self.color);
+        draw_texture(texture, x, y, Color::new(1.0, 1.0, 1.0, 1.0));
         self.particles.draw();
     }
 }
@@ -243,13 +244,25 @@ impl Game {
     }
 }
 
-#[macroquad::main("Moon")]
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "moon-rs".to_owned(),
+        fullscreen: false,
+        window_width: 1920,
+        window_height: 1080,
+        ..Default::default()
+    }
+}
+
+#[macroquad::main(window_conf)]
 async fn main() {
+    let lander_texture = load_texture("./assets/lander.png").await.unwrap();
+    let stars_texture = load_texture("./assets/stars.png").await.unwrap();
     let mut game = Game {
         lander: Lander {
             delta: (0.0, 0.0),
             thrusters: (0.0, 0.0),
-            size: (20.0, 20.0),
+            size: (18.0, 15.0),
             point: (screen_width() / 2.0 - 60.0, 100.0),
             color: WHITE,
             mass: 15103.0,
@@ -265,9 +278,9 @@ async fn main() {
     };
     loop {
         clear_background(BLACK);
-
+        draw_texture(stars_texture, 0.0, 0.0, Color::new(1.0, 1.0, 1.0, 1.0));
         game.lander.movement();
-        game.lander.draw();
+        game.lander.draw(lander_texture);
         game.lunar_gravity();
 
         next_frame().await
