@@ -1,24 +1,201 @@
 use macroquad::prelude::*;
 
-struct Lander {
-    dy: f64,
-    size: (f32, f32),
-    point: (f32, f32),
+struct Particles {
+    particles: Option<Vec<Particle>>,
+}
+
+impl Particles {
+    pub fn movement(&mut self) {
+        // Move all the partices in the vector
+        self.particles
+            .iter_mut()
+            .flatten()
+            .filter(|particle| particle.active)
+            .for_each(|particle| particle.movement());
+        self.cleanup();
+    }
+    pub fn draw(&mut self) {
+        // Draw all the partices in the vector
+        self.particles
+            .iter_mut()
+            .flatten()
+            .filter(|particle| particle.active)
+            .for_each(|particle| particle.draw());
+    }
+    pub fn cleanup(&mut self) {
+        // Remove the inactive particles from the vector using retain
+        self.particles
+            .as_mut()
+            .unwrap()
+            .retain_mut(|particle| particle.active);
+    }
+}
+
+struct Particle {
+    speed: f32,
+    direction: String,
+    active: bool,
+    halflife: f32,
+    point: (f32, f32), // x,y
+    sides: u8,
+    radius: f32,
+    rotation: f32,
     color: Color,
-    mass: f64,
+}
+
+impl Particle {
+    pub fn new(x: f32, y: f32, direction: &str, color: Color) -> Self {
+        let speed = rand::gen_range(0.0, 50.0);
+        let halflife = rand::gen_range(0.0, 10.0);
+        let size = rand::gen_range(0.0, 3.0);
+        Self {
+            point: (x, y),
+            speed,
+            halflife,
+            radius: size,
+            rotation: 0.0,
+            sides: 5,
+            active: true,
+            color,
+            direction: direction.to_string(),
+        }
+    }
+    pub fn movement(&mut self) {
+        match self.direction.as_str() {
+            "left" => {
+                self.point.0 += self.speed;
+            }
+            "right" => {
+                self.point.0 -= self.speed;
+            }
+            "down" => {
+                self.point.1 += self.speed;
+            }
+            _ => {}
+        }
+        let decay = 1.25;
+        self.halflife -= decay;
+        if self.halflife < 0.0 {
+            self.active = false;
+        }
+    }
+    pub fn draw(&mut self) {
+        // Only draw active particles
+        if self.active {
+            draw_poly(
+                self.point.0,
+                self.point.1,
+                self.sides,
+                self.radius,
+                self.rotation,
+                self.color,
+            );
+        }
+    }
+}
+
+struct Lander {
+    delta: (f32, f32),     // dx,dy
+    thrusters: (f32, f32), // tx,ty
+    size: (f32, f32),      // w,h
+    point: (f32, f32),     // x,y
+    color: Color,
+    mass: f64, // kg
+    fuel: f64, // kg
+    particles: Particles,
 }
 
 impl Lander {
     pub fn movement(&mut self) {
-        self.point.1 += self.dy as f32;
+        let color = match rand::gen_range(0, 4) {
+            0 => YELLOW,
+            1 => ORANGE,
+            2 => RED,
+            3 => WHITE,
+            4 => GRAY,
+            _ => BLACK,
+        };
+        if is_key_down(KeyCode::K) || is_key_down(KeyCode::Up) {
+            let particle = Particle::new(
+                self.point.0 + self.size.0 / 2.0,
+                self.point.1 + self.size.1,
+                "down",
+                color,
+            );
+            self.thrusters("up");
+            if self.fuel > 0.0 {
+                self.particles.particles.as_mut().unwrap().push(particle);
+            }
+        }
+        if is_key_down(KeyCode::H) || is_key_down(KeyCode::Left) {
+            let particle = Particle::new(
+                self.point.0 + self.size.1,
+                self.point.1 + self.size.1 / 2.0,
+                "left",
+                color,
+            );
+            self.thrusters("left");
+            if self.fuel > 0.0 {
+                self.particles.particles.as_mut().unwrap().push(particle);
+            }
+        }
+        if is_key_down(KeyCode::L) || is_key_down(KeyCode::Right) {
+            let particle = Particle::new(
+                self.point.0,
+                self.point.1 + self.size.1 / 2.0,
+                "right",
+                color,
+            );
+            self.thrusters("right");
+            if self.fuel > 0.0 {
+                self.particles.particles.as_mut().unwrap().push(particle);
+            }
+        }
+        if !is_key_down(KeyCode::K) && !is_key_down(KeyCode::H) && !is_key_down(KeyCode::L) {
+            self.thrusters.0 = 0.0;
+            self.thrusters.1 = 0.0;
+        }
+        self.point.0 += self.delta.0;
+        self.point.1 += self.delta.1;
+        self.particles.movement();
     }
-    pub fn thrusters(&mut self) {
-        let (x, y) = self.point;
+    pub fn thrusters(&mut self, direction: &str) {
+        match direction {
+            "up" => self.up(),
+            "left" => self.left(),
+            "right" => self.right(),
+            _ => {}
+        };
+        self.delta.0 += self.thrusters.0;
+        self.delta.1 += self.thrusters.1;
     }
+    pub fn up(&mut self) {
+        if self.fuel > 0.0 {
+            let rate = 1.25;
+            self.fuel -= rate;
+            self.thrusters.1 = -rate as f32;
+        }
+    }
+    pub fn left(&mut self) {
+        if self.fuel > 0.0 {
+            let rate = 0.0075;
+            self.fuel -= rate;
+            self.thrusters.0 = -rate as f32;
+        }
+    }
+    pub fn right(&mut self) {
+        if self.fuel > 0.0 {
+            let rate = 0.0075;
+            self.fuel -= rate;
+            self.thrusters.0 = rate as f32;
+        }
+    }
+
     pub fn draw(&mut self) {
         let (w, h) = self.size;
         let (x, y) = self.point;
         draw_rectangle(x, y, w, h, self.color);
+        self.particles.draw();
     }
 }
 
@@ -44,44 +221,55 @@ impl Game {
         let m1: f64 = self.lander.mass;
         let m2: f64 = self.moon.mass;
         let a: f64 = screen_width() as f64 / 2.0 - self.lander.point.0 as f64;
-        let b: f64 = screen_height() as f64 - self.lander.point.1 as f64;
+        // Do something with moon radius?
+        let b: f64 = screen_height() as f64 + self.moon.radius - self.lander.point.1 as f64;
         let d: f64 = a.powi(2) + b.powi(2);
         let d: f64 = d.sqrt();
         let f_grav: f64 = (G * m1 * m2) / d.powi(2);
         println!(
-            "x: {}, y: {}, d: {}, dy: {}",
-            self.lander.point.0, self.lander.point.1, d, self.lander.dy
+            "fuel: {}, x: {}, y: {}, d: {}, dx: {}, dy: {}, tx: {}, ty: {}",
+            self.lander.fuel,
+            self.lander.point.0,
+            self.lander.point.1,
+            d,
+            self.lander.delta.0,
+            self.lander.delta.1,
+            self.lander.thrusters.0,
+            self.lander.thrusters.1
         );
         // To make it more realistic
-        let modifier = 100000000.0;
-        self.lander.dy = f_grav * modifier;
+        let modifier = 250000000.0;
+        self.lander.delta.1 = (f_grav * modifier) as f32;
     }
 }
 
-#[macroquad::main("BasicShapes")]
+#[macroquad::main("Moon")]
 async fn main() {
     let mut game = Game {
         lander: Lander {
-            dy: 0.0,
+            delta: (0.0, 0.0),
+            thrusters: (0.0, 0.0),
             size: (20.0, 20.0),
             point: (screen_width() / 2.0 - 60.0, 100.0),
             color: WHITE,
-            mass: 15103.0, // kg
+            mass: 15103.0,
+            fuel: 10000.0,
+            particles: Particles {
+                particles: Some(Vec::<Particle>::new()),
+            },
         },
         moon: Moon {
-            mass: 7.342 * 1022.0, // kg
-            radius: 1737.4,       // km
+            mass: 7.342 * 1022.0,
+            radius: 1737.4,
         },
     };
     loop {
         clear_background(BLACK);
 
         game.lander.movement();
-        game.lander.thrusters();
         game.lander.draw();
         game.lunar_gravity();
 
         next_frame().await
     }
 }
-
