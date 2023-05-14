@@ -239,7 +239,7 @@ impl Game {
             self.lander.thrusters.1
         );
         // To make it more realistic
-        let modifier = 250000000.0;
+        let modifier = 500000000.0;
         self.lander.delta.1 = (f_grav * modifier) as f32;
     }
 }
@@ -248,8 +248,8 @@ fn window_conf() -> Conf {
     Conf {
         window_title: "moon-rs".to_owned(),
         fullscreen: false,
-        window_width: 1920,
-        window_height: 1080,
+        window_width: 1024,
+        window_height: 768,
         ..Default::default()
     }
 }
